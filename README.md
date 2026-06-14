@@ -137,6 +137,53 @@ lexmind-telegram-bot/
 - `data/leads.json` — всі знайдені заявки (не комітяться в git)
 - `data/radar_state.json` — стан увімкнено/вимкнено
 
+## LexMind Daily Radar (GitHub Actions)
+
+Окремий режим, який запускається раз на добу через GitHub Actions і читає
+історію групи за останні 24 години через **Telethon** (user-акаунт).
+
+**Відмінність від Live Radar:**
+
+| | Live Radar (`bot.py`) | Daily Radar (`daily_radar.py`) |
+|---|---|---|
+| Режим | 24/7 long polling | Одноразовий запуск |
+| Транспорт | PTB `MessageHandler` | Telethon `iter_messages` |
+| Реакція | Миттєво при появі | Раз на добу о 09:00 Kyiv |
+| Хостинг | Потрібен сервер | GitHub Actions (безкоштовно) |
+| Результат | Окреме сповіщення на кожну заявку | Один дайджест за добу |
+
+**Розклад:** щодня о `0 6 * * *` UTC = 09:00 Kyiv (влітку).
+
+**Потрібні GitHub Secrets:**
+
+| Secret | Де взяти |
+|--------|----------|
+| `TELEGRAM_API_ID` | [my.telegram.org](https://my.telegram.org) → API development tools |
+| `TELEGRAM_API_HASH` | Там само |
+| `TELEGRAM_SESSION_STRING` | Генерується один раз (див. нижче) |
+| `TELEGRAM_BOT_TOKEN` | [@BotFather](https://t.me/BotFather) (той самий токен бота) |
+
+**Як отримати `TELEGRAM_SESSION_STRING`:**
+
+```python
+# Запустити один раз локально:
+from telethon.sync import TelegramClient
+from telethon.sessions import StringSession
+
+api_id = int(input("API ID: "))
+api_hash = input("API Hash: ")
+
+with TelegramClient(StringSession(), api_id, api_hash) as client:
+    print("SESSION STRING:")
+    print(client.session.save())
+```
+
+Скопіювати рядок і додати як secret `TELEGRAM_SESSION_STRING`.
+Після цього локальний скрипт більше не потрібен.
+
+**Ручний запуск через GitHub UI:**
+Actions → LexMind Daily Radar → Run workflow → Run workflow.
+
 ## Логування
 
 Всі виклики команд записуються у `logs/bot.log`:
