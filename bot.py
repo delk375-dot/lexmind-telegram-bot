@@ -14,9 +14,12 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import Forbidden, TelegramError
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    Application, CallbackQueryHandler, CommandHandler,
+    ContextTypes, MessageHandler, filters,
+)
 
 from personality import (
     BOOK_INTROS, FILM_INTROS, INSIGHT_INTROS,
@@ -45,6 +48,9 @@ KYIV_TZ = ZoneInfo("Europe/Kyiv")
 BASE_DIR = Path(__file__).parent
 CONTENT_DIR = BASE_DIR / "content"
 STATE_FILE = BASE_DIR / "state.json"
+SHOP_BOOKS_FILE = CONTENT_DIR / "shop_books.json"
+
+ADMIN_USER_ID = 219205800
 
 # ─── Логування ───────────────────────────────────────────────────────────────
 LOG_FILE = BASE_DIR / "logs" / "bot.log"
@@ -91,6 +97,12 @@ def load_content(filename: str) -> list:
     """Зчитує контент зі JSON-файлу."""
     path = CONTENT_DIR / filename
     with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_shop_books() -> list:
+    """Зчитує каталог книг магазину."""
+    with open(SHOP_BOOKS_FILE, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -224,13 +236,16 @@ async def send_to_group(context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/start — відповідь у приваті."""
     log_command(update, "start")
-    intro = random.choice(BOOK_INTROS[:5])  # перші 5 — найбільш "вступні"
+    intro = random.choice(BOOK_INTROS[:5])
     text = (
         f"{intro}\n\n"
         f"Пиши /voice, щоб дізнатись більше про мене.\n"
         f"Пиши /help, щоб побачити, що я вмію."
     )
-    await update.message.reply_text(text, parse_mode="Markdown")
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("📚 Книги", callback_data="shop_list"),
+    ]])
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -259,6 +274,107 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
+
+# ─── Магазин книг ────────────────────────────────────────────────────────────
+
+async def cmd_shop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/shop — показує каталог книг."""
+    log_command(update, "shop")
+    await _show_shop_list(update.message.reply_text)
+
+
+async def _show_shop_list(reply_fn) -> None:
+    """Надсилає список книг з inline-кнопками."""
+    books = load_shop_books()
+    icons = ["📘", "📕", "📗", "📙"]
+    buttons = [
+        [InlineKeyboardButton(
+            f"{icons[i % len(icons)]} {b['title']}",
+            callback_data=f"shop_book:{b['id']}",
+        )]
+        for i, b in enumerate(books)
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
+    await reply_fn("Каталог книг LexMind:", reply_markup=keyboard)
+
+
+async def callback_shop_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: показати список книг (кнопка ⬅️ Назад або 📚 Книги)."""
+    query = update.callback_query
+    await query.answer()
+    books = load_shop_books()
+    icons = ["📘", "📕", "📗", "📙"]
+    buttons = [
+        [InlineKeyboardButton(
+            f"{icons[i % len(icons)]} {b['title']}",
+            callback_data=f"shop_book:{b['id']}",
+        )]
+        for i, b in enumerate(books)
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
+    await query.edit_message_text("Каталог книг LexMind:", reply_markup=keyboard)
+
+
+async def callback_book_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: картка конкретної книги."""
+    query = update.callback_query
+    await query.answer()
+    book_id = query.data.split(":", 1)[1]
+    books = load_shop_books()
+    book = next((b for b in books if b["id"] == book_id), None)
+    if not book:
+        await query.edit_message_text("Книгу не знайдено.")
+        return
+
+    text = (
+        f"📖 *{book['title']}*\n\n"
+        f"{book['description']}\n\n"
+        f"*Формат:* {book['format']}\n"
+        f"*Ціна:* {book['price']}"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🛒 Хочу замовити", callback_data=f"shop_order:{book_id}")],
+        [InlineKeyboardButton("⬅️ Назад до книг", callback_data="shop_list")],
+    ])
+    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=keyboard)
+
+
+async def callback_book_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback: обробка замовлення книги."""
+    query = update.callback_query
+    await query.answer()
+    book_id = query.data.split(":", 1)[1]
+    books = load_shop_books()
+    book = next((b for b in books if b["id"] == book_id), None)
+    book_title = book["title"] if book else book_id
+
+    user = query.from_user
+    user_name = user.full_name if user else "Невідомо"
+    username = f"@{user.username}" if user and user.username else "—"
+    user_id = user.id if user else "?"
+
+    # Повідомлення користувачу
+    await query.edit_message_text(
+        "Дякую. Я передам заявку Василю Васильовичу.\n\n"
+        "Він або його команда зв'яжуться з вами щодо формату, оплати та отримання книги.",
+    )
+
+    # Сповіщення адміну
+    admin_text = (
+        f"📚 Нова заявка на книгу\n\n"
+        f"Книга: {book_title}\n"
+        f"Користувач: {user_name}\n"
+        f"Username: {username}\n"
+        f"Telegram ID: {user_id}"
+    )
+    try:
+        await context.bot.send_message(chat_id=ADMIN_USER_ID, text=admin_text)
+        logger.info("Shop order: книга=%r user_id=%s", book_title, user_id)
+    except Exception as e:
+        logger.error("Shop order: не вдалось сповістити адміна: %s", e)
+
+
+# ─── Команди бота ─────────────────────────────────────────────────────────────
 
 async def cmd_book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/book — публікує наступну книгу в тему групи."""
@@ -903,6 +1019,11 @@ async def main_async() -> None:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("voice", cmd_voice))
     app.add_handler(CommandHandler("help", cmd_help))
+    app.add_handler(CommandHandler("shop", cmd_shop))
+    # Shop inline callbacks
+    app.add_handler(CallbackQueryHandler(callback_shop_list,    pattern="^shop_list$"))
+    app.add_handler(CallbackQueryHandler(callback_book_detail,  pattern="^shop_book:"))
+    app.add_handler(CallbackQueryHandler(callback_book_order,   pattern="^shop_order:"))
     app.add_handler(CommandHandler("book", cmd_book))
     app.add_handler(CommandHandler("film", cmd_film))
     app.add_handler(CommandHandler("insight", cmd_insight))
@@ -939,6 +1060,7 @@ async def main_async() -> None:
         BotCommand("start",               "Вступ від LexMind"),
         BotCommand("voice",               "Хто такий LexMind"),
         BotCommand("help",                "Список команд"),
+        BotCommand("shop",                "📚 Книги — каталог і замовлення"),
         BotCommand("book",                "📚 Книжкова провокація тижня → в групу"),
         BotCommand("film",                "🎬 Кінопровокація тижня → в групу"),
         BotCommand("insight",             "💡 Думка тижня → в групу"),
