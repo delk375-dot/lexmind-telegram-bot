@@ -36,7 +36,7 @@ from radar import (
 
 # ─── Завантаження токена з .env ───────────────────────────────────────────────
 load_dotenv()
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TOKEN = (os.getenv("TELEGRAM_BOT_TOKEN") or "").lstrip("﻿").strip()
 if not TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не знайдено у .env файлі")
 
@@ -56,7 +56,7 @@ CONTENT_DIR = BASE_DIR / "content"
 STATE_FILE = BASE_DIR / "state.json"
 SHOP_BOOKS_FILE = CONTENT_DIR / "shop_books.json"
 
-ADMIN_USER_ID = int(os.getenv("ADMIN_CHAT_ID", "219205800"))
+ADMIN_USER_ID = int((os.getenv("ADMIN_CHAT_ID") or "219205800").lstrip("﻿").strip() or "219205800")
 
 # ─── Логування ───────────────────────────────────────────────────────────────
 # Логування лише в консоль (на Vercel ФС read-only — жодних FileHandler на імпорті).
@@ -889,7 +889,7 @@ async def cmd_health(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 # ─── Команди попереднього перегляду і адмін-скидання ────────────────────────
 
-ADMIN_USER_ID = int(os.getenv("ADMIN_CHAT_ID", "219205800"))
+ADMIN_USER_ID = int((os.getenv("ADMIN_CHAT_ID") or "219205800").lstrip("﻿").strip() or "219205800")
 
 
 async def cmd_previewbook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
