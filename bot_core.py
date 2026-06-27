@@ -50,6 +50,7 @@ COMMUNITY_NAME = "Посиденьки юристів"
 COMMUNITY_INVITE_LINK = "https://t.me/+THPzg8hJ-cFHXS7c"
 SITE_URL = "https://practical-law.com"  # сайт Центру практичної юриспруденції
 SITE_CTA = SITE_URL + "?utm_source=telegram&utm_medium=bot&utm_campaign=lexmind"  # трекінг у GA4
+YOUTUBE_URL = "https://www.youtube.com/@lawmasiuk"  # YouTube-канал Василя Масюка
 
 # ─── Безкоштовна книга (повідомлення у спільноті) ────────────────────────────
 FREE_BOOK_TITLE = "Секрети практичної юриспруденції"
@@ -319,6 +320,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         [InlineKeyboardButton("📚 Книги", callback_data="shop_list")],
         [InlineKeyboardButton("🤝 Спільнота юристів", url=COMMUNITY_INVITE_LINK)],
         [InlineKeyboardButton("🌐 Сайт центру", url=SITE_CTA)],
+        [InlineKeyboardButton("▶️ YouTube", url=YOUTUBE_URL)],
     ])
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
@@ -334,7 +336,8 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "🤝 /join — доєднатися до спільноти юристів\n"
         "🗣 /voice — хто такий LexMind\n"
         "ℹ️ /help — цей список\n\n"
-        "🌐 Сайт центру: practical-law.com"
+        "🌐 Сайт центру: practical-law.com\n"
+        "▶️ YouTube: youtube.com/@lawmasiuk"
     )
 
     # Адмін додатково бачить керівні команди
@@ -653,6 +656,7 @@ async def cmd_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🤝 Доєднатися до спільноти", url=COMMUNITY_INVITE_LINK)],
         [InlineKeyboardButton("🌐 Сайт центру", url=SITE_CTA)],
+        [InlineKeyboardButton("▶️ YouTube", url=YOUTUBE_URL)],
     ])
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 

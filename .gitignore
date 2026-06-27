@@ -9,3 +9,5 @@ venv/
 # Radar — приватні заявки не комітяться
 data/leads.json
 data/radar_state.json
+.vercel
+.env*
