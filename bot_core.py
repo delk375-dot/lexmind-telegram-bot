@@ -53,11 +53,29 @@ SITE_CTA = SITE_URL + "?utm_source=telegram&utm_medium=bot&utm_campaign=lexmind"
 YOUTUBE_URL = "https://www.youtube.com/@lawmasiuk"  # YouTube-канал Василя Масюка
 FACEBOOK_URL = "https://www.facebook.com/share/18Vns7RGFr/"  # Facebook Василя Масюка
 
-# ─── Безкоштовна книга (повідомлення у спільноті) ────────────────────────────
-FREE_BOOK_TITLE = "Секрети практичної юриспруденції"
-FREE_BOOK_GROUP_ID = GROUP_CHAT_ID          # супергрупа «Посиденьки юристів»
-FREE_BOOK_MSG_ID = 32249                     # id повідомлення з книгою
-FREE_BOOK_LINK = "https://t.me/c/1282667395/1/32249"
+# ─── Безкоштовні матеріали (лід-магніти) ─────────────────────────────────────
+# Кожен матеріал = одне повідомлення-файл у закритій спільноті. Гейт по членству.
+# Додати новий матеріал = додати запис сюди (slug → дані) + сторінку на сайті
+# з кнопкою https://t.me/LexMind007_bot?start=<slug>.
+FREEBIE_GROUP_ID = GROUP_CHAT_ID             # супергрупа «Посиденьки юристів»
+DEFAULT_FREEBIE = "secrets"                  # що віддавати на /start freebook (легасі-лінк)
+
+FREEBIES = {
+    "secrets": {
+        "emoji": "📕",
+        "noun": "Книга",
+        "title": "Секрети практичної юриспруденції",
+        "msg_id": 32249,
+        "link": "https://t.me/c/1282667395/1/32249",
+    },
+    "intervyu-chevguz": {
+        "emoji": "📥",
+        "noun": "Матеріал",
+        "title": "Квінтесенція інтерв'ю з адвокатом Віктором Чевгузом",
+        "msg_id": 32251,
+        "link": "https://t.me/c/1282667395/26898/32251",
+    },
+}
 
 # ─── Шляхи до файлів ─────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).parent
@@ -249,67 +267,111 @@ async def send_to_group(context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
 async def _is_community_member(bot, user_id: int) -> bool:
     """True, якщо користувач є у спільноті (учасник/адмін/власник)."""
     try:
-        member = await bot.get_chat_member(FREE_BOOK_GROUP_ID, user_id)
+        member = await bot.get_chat_member(FREEBIE_GROUP_ID, user_id)
         return member.status in ("member", "administrator", "creator", "restricted")
     except Exception as e:
         logger.warning("get_chat_member(%s) не вдалося: %s", user_id, e)
         return False
 
 
-async def send_free_book(bot, user_id: int) -> None:
-    """Видає безкоштовну книгу учаснику; не-учаснику пропонує вступити."""
+async def send_freebie(bot, user_id: int, slug: str = DEFAULT_FREEBIE) -> None:
+    """Видає безкоштовний матеріал учаснику; не-учаснику пропонує вступити."""
+    fb = FREEBIES.get(slug) or FREEBIES[DEFAULT_FREEBIE]
+    emoji, title, noun = fb["emoji"], fb["title"], fb.get("noun", "Матеріал")
     if await _is_community_member(bot, user_id):
         try:
             await bot.copy_message(
                 chat_id=user_id,
-                from_chat_id=FREE_BOOK_GROUP_ID,
-                message_id=FREE_BOOK_MSG_ID,
+                from_chat_id=FREEBIE_GROUP_ID,
+                message_id=fb["msg_id"],
             )
             await bot.send_message(
-                user_id, f"📕 Ваша книга «{FREE_BOOK_TITLE}» — вище. Гарного читання!"
+                user_id, f"{emoji} «{title}» — вище. Гарного користування!"
             )
         except Exception as e:
-            logger.warning("copy_message безкоштовної книги не вдалося: %s", e)
+            logger.warning("copy_message матеріалу '%s' не вдалося: %s", slug, e)
             await bot.send_message(
-                user_id,
-                f"📕 Книга «{FREE_BOOK_TITLE}» тут:\n{FREE_BOOK_LINK}",
+                user_id, f"{emoji} «{title}» тут:\n{fb['link']}"
             )
     else:
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("🤝 Приєднатися до спільноти", url=COMMUNITY_INVITE_LINK)],
-            [InlineKeyboardButton("✅ Я вступив — отримати книгу", callback_data="freebook")],
+            [InlineKeyboardButton("✅ Я вступив — отримати", callback_data=f"getfree:{slug}")],
         ])
         await bot.send_message(
             user_id,
-            f"📕 *Безкоштовна книга «{FREE_BOOK_TITLE}»*\n\n"
-            "Вона доступна учасникам нашої спільноти. Лише 2 кроки:\n\n"
+            f"{emoji} *{noun}: «{title}»*\n\n"
+            "Доступний учасникам нашої спільноти. Лише 2 кроки:\n\n"
             "1️⃣ Приєднайтесь до спільноти 👇\n"
-            "2️⃣ Поверніться сюди й натисніть *«Я вступив»* — і я надішлю книгу.",
+            "2️⃣ Поверніться сюди й натисніть *«Я вступив»* — і я надішлю.",
             parse_mode="Markdown",
             reply_markup=kb,
         )
 
 
+def _materialy_keyboard() -> InlineKeyboardMarkup:
+    """Кнопки-список усіх безкоштовних матеріалів."""
+    rows = [
+        [InlineKeyboardButton(f"{fb['emoji']} {fb['title']}", callback_data=f"getfree:{slug}")]
+        for slug, fb in FREEBIES.items()
+    ]
+    return InlineKeyboardMarkup(rows)
+
+
+async def show_materialy(bot, chat_id: int) -> None:
+    await bot.send_message(
+        chat_id,
+        "📥 *Безкоштовні матеріали*\n\n"
+        "Обери — і я надішлю в приват \\(потрібно бути учасником спільноти\\):",
+        parse_mode="MarkdownV2",
+        reply_markup=_materialy_keyboard(),
+    )
+
+
+async def cmd_materialy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/materialy — список безкоштовних матеріалів."""
+    log_command(update, "materialy")
+    await show_materialy(context.bot, update.effective_chat.id)
+
+
 async def cmd_freebook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/freebook — отримати безкоштовну книгу (з перевіркою членства)."""
+    """/freebook — безкоштовна книга (легасі-аліас на матеріал за замовчуванням)."""
     log_command(update, "freebook")
-    await send_free_book(context.bot, update.effective_user.id)
+    await send_freebie(context.bot, update.effective_user.id, DEFAULT_FREEBIE)
 
 
 async def callback_freebook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Кнопка «Безкоштовна книга» / «Я вступив»."""
+    """Кнопка «Безкоштовна книга» (легасі callback_data=freebook)."""
     query = update.callback_query
     await query.answer()
-    await send_free_book(context.bot, query.from_user.id)
+    await send_freebie(context.bot, query.from_user.id, DEFAULT_FREEBIE)
+
+
+async def callback_getfree(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Кнопка «Я вступив — отримати» / вибір матеріалу: callback_data=getfree:<slug>."""
+    query = update.callback_query
+    await query.answer()
+    slug = query.data.split(":", 1)[1] if ":" in query.data else DEFAULT_FREEBIE
+    await send_freebie(context.bot, query.from_user.id, slug)
+
+
+async def callback_materialy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Кнопка «Безкоштовні матеріали» в меню."""
+    query = update.callback_query
+    await query.answer()
+    await show_materialy(context.bot, query.message.chat_id)
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/start — відповідь у приваті."""
     log_command(update, "start")
-    # Deep-link із сайту: /start freebook -> одразу безкоштовна книга
-    if context.args and context.args[0] == "freebook":
-        await send_free_book(context.bot, update.effective_user.id)
-        return
+    # Deep-link із сайту: /start <slug> (легасі freebook) -> одразу матеріал
+    if context.args:
+        arg = context.args[0]
+        slug = DEFAULT_FREEBIE if arg == "freebook" else arg
+        if slug in FREEBIES:
+            await send_freebie(context.bot, update.effective_user.id, slug)
+            return
     intro = random.choice(BOOK_INTROS[:5])
     text = (
         f"{intro}\n\n"
@@ -318,6 +380,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("📕 Безкоштовна книга", callback_data="freebook")],
+        [InlineKeyboardButton("📥 Безкоштовні матеріали", callback_data="materialy")],
         [InlineKeyboardButton("📚 Книги", callback_data="shop_list")],
         [InlineKeyboardButton("🤝 Спільнота юристів", url=COMMUNITY_INVITE_LINK)],
         [InlineKeyboardButton("🌐 Сайт центру", url=SITE_CTA)],
@@ -335,6 +398,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
         "Привіт! Ось що я вмію:\n\n"
         "📚 /shop — каталог книг і замовлення\n"
+        "📥 /materialy — безкоштовні матеріали\n"
         "🤝 /join — доєднатися до спільноти юристів\n"
         "🗣 /voice — хто такий LexMind\n"
         "ℹ️ /help — цей список\n\n"
@@ -1158,7 +1222,10 @@ def build_application():
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("shop", cmd_shop))
     app.add_handler(CommandHandler("freebook", cmd_freebook))
+    app.add_handler(CommandHandler("materialy", cmd_materialy))
     app.add_handler(CallbackQueryHandler(callback_freebook, pattern="^freebook$"))
+    app.add_handler(CallbackQueryHandler(callback_materialy, pattern="^materialy$"))
+    app.add_handler(CallbackQueryHandler(callback_getfree,  pattern="^getfree:"))
     app.add_handler(CallbackQueryHandler(callback_shop_list,    pattern="^shop_list$"))
     app.add_handler(CallbackQueryHandler(callback_book_detail,  pattern="^shop_book:"))
     app.add_handler(CallbackQueryHandler(callback_book_order,   pattern="^shop_order:"))
