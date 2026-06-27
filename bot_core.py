@@ -58,13 +58,13 @@ FACEBOOK_URL = "https://www.facebook.com/share/18Vns7RGFr/"  # Facebook Васи
 # Додати новий матеріал = додати запис сюди (slug → дані) + сторінку на сайті
 # з кнопкою https://t.me/LexMind007_bot?start=<slug>.
 FREEBIE_GROUP_ID = GROUP_CHAT_ID             # супергрупа «Посиденьки юристів»
-DEFAULT_FREEBIE = "secrets"                  # що віддавати на /start freebook (легасі-лінк)
+DEFAULT_FREEBIE = "pozovna"                  # що віддавати на /start freebook (легасі-лінк)
 
 FREEBIES = {
-    "secrets": {
+    "pozovna": {
         "emoji": "📕",
         "noun": "Книга",
-        "title": "Секрети практичної юриспруденції",
+        "title": "Позовна заява. Алгоритм складання та подання",
         "msg_id": 32249,
         "link": "https://t.me/c/1282667395/1/32249",
     },
@@ -379,7 +379,6 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"Пиши /help, щоб побачити, що я вмію."
     )
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📕 Безкоштовна книга", callback_data="freebook")],
         [InlineKeyboardButton("📥 Безкоштовні матеріали", callback_data="materialy")],
         [InlineKeyboardButton("📚 Книги", callback_data="shop_list")],
         [InlineKeyboardButton("🤝 Спільнота юристів", url=COMMUNITY_INVITE_LINK)],
@@ -1267,7 +1266,7 @@ async def sync_commands(app) -> None:
     user_commands = [
         BotCommand("start", "Головне меню"),
         BotCommand("shop",  "📚 Книги — каталог і замовлення"),
-        BotCommand("freebook", "📕 Безкоштовна книга"),
+        BotCommand("materialy", "📥 Безкоштовні матеріали"),
         BotCommand("join",  "🤝 Спільнота юристів"),
         BotCommand("voice", "🗣 Хто такий LexMind"),
         BotCommand("help",  "ℹ️ Що вміє бот"),
