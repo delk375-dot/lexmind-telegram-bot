@@ -49,6 +49,7 @@ KYIV_TZ = ZoneInfo("Europe/Kyiv")
 COMMUNITY_NAME = "Посиденьки юристів"
 COMMUNITY_INVITE_LINK = "https://t.me/+THPzg8hJ-cFHXS7c"
 SITE_URL = "https://practical-law.com"  # сайт Центру практичної юриспруденції
+SITE_CTA = SITE_URL + "?utm_source=telegram&utm_medium=bot&utm_campaign=lexmind"  # трекінг у GA4
 
 # ─── Безкоштовна книга (повідомлення у спільноті) ────────────────────────────
 FREE_BOOK_TITLE = "Секрети практичної юриспруденції"
@@ -71,6 +72,10 @@ _console_handler = logging.StreamHandler()
 _console_handler.setFormatter(_log_fmt)
 logging.basicConfig(level=logging.INFO, handlers=[_console_handler])
 logger = logging.getLogger(__name__)
+
+# Не логувати токен: httpx пише повні URL запитів до Telegram API (з токеном).
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def log_command(update: Update, command: str) -> None:
@@ -313,7 +318,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         [InlineKeyboardButton("📕 Безкоштовна книга", callback_data="freebook")],
         [InlineKeyboardButton("📚 Книги", callback_data="shop_list")],
         [InlineKeyboardButton("🤝 Спільнота юристів", url=COMMUNITY_INVITE_LINK)],
-        [InlineKeyboardButton("🌐 Сайт центру", url=SITE_URL)],
+        [InlineKeyboardButton("🌐 Сайт центру", url=SITE_CTA)],
     ])
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
@@ -647,7 +652,7 @@ async def cmd_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🤝 Доєднатися до спільноти", url=COMMUNITY_INVITE_LINK)],
-        [InlineKeyboardButton("🌐 Сайт центру", url=SITE_URL)],
+        [InlineKeyboardButton("🌐 Сайт центру", url=SITE_CTA)],
     ])
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
