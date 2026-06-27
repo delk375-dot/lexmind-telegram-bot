@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import random
+from functools import wraps
 from datetime import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -43,6 +44,10 @@ if not TOKEN:
 GROUP_CHAT_ID = -1001282667395
 FILMS_BOOKS_THREAD_ID = 23975  # тема "Фільми, книги"
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
+
+# ─── Спільнота юристів ───────────────────────────────────────────────────────
+COMMUNITY_NAME = "Посиденьки юристів"
+COMMUNITY_INVITE_LINK = "https://t.me/+THPzg8hJ-cFHXS7c"
 
 # ─── Шляхи до файлів ─────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).parent
@@ -242,36 +247,49 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"Пиши /voice, щоб дізнатись більше про мене.\n"
         f"Пиши /help, щоб побачити, що я вмію."
     )
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("📚 Книги", callback_data="shop_list"),
-    ]])
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📚 Книги", callback_data="shop_list")],
+        [InlineKeyboardButton("🤝 Спільнота юристів", url=COMMUNITY_INVITE_LINK)],
+    ])
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/help — список команд."""
+    """/help — список команд (адмін бачить повний набір)."""
     log_command(update, "help")
+
+    # Меню для звичайних користувачів
     text = (
-        "Що я вмію:\n\n"
-        "📚 /book — книжкова провокація → в групу\n"
-        "🎬 /film — кінопровокація → в групу\n"
-        "💡 /insight — думка тижня → в групу\n"
-        "❓ /question — незручне питання → в групу\n"
-        "🧩 /manipulation — маніпуляція тижня → в групу\n"
-        "🗣 /phrase — фраза для переговорів → в групу\n\n"
-        "👁 *Перегляд \\(без публікації\\):*\n"
-        "/previewbook · /previewfilm\n"
-        "/previewquestion · /previewmanipulation · /previewphrase\n\n"
-        "🗣 /voice — хто такий LexMind\n\n"
-        "⏰ *Автопублікації \\(Europe/Kyiv\\):*\n"
-        "Пн 10:00 — книга\n"
-        "Вт 10:00 — питання\n"
-        "Ср 10:00 — маніпуляція\n"
-        "Чт 10:00 — фільм\n"
-        "Пт 10:00 — думка  |  Пт 15:00 — фраза\n\n"
-        "⚙️ *Адміністративні:*\n"
-        "/health · /topicinfo · /testtopic · /listtopics · /resetcontent"
+        "Привіт! Ось що я вмію:\n\n"
+        "📚 /shop — каталог книг і замовлення\n"
+        "🤝 /join — доєднатися до спільноти юристів\n"
+        "🗣 /voice — хто такий LexMind\n"
+        "ℹ️ /help — цей список"
     )
+
+    # Адмін додатково бачить керівні команди
+    if update.effective_user and update.effective_user.id == ADMIN_USER_ID:
+        text += (
+            "\n\n"
+            "— — — *Адмін* — — —\n\n"
+            "📤 *Публікація → в групу:*\n"
+            "/book · /film · /insight\n"
+            "/question · /manipulation · /phrase\n\n"
+            "👁 *Перегляд \\(без публікації\\):*\n"
+            "/previewbook · /previewfilm\n"
+            "/previewquestion · /previewmanipulation · /previewphrase\n\n"
+            "⏰ *Автопублікації \\(Europe/Kyiv\\):*\n"
+            "Пн 10:00 — книга\n"
+            "Вт 10:00 — питання\n"
+            "Ср 10:00 — маніпуляція\n"
+            "Чт 10:00 — фільм\n"
+            "Пт 10:00 — думка  |  Пт 15:00 — фраза\n\n"
+            "📡 *Radar:*\n"
+            "/leadson · /leadsoff · /radar\\_test · /lead\\_keywords · /leads\\_today\n\n"
+            "⚙️ *Діагностика:*\n"
+            "/health · /topicinfo · /testtopic · /listtopics · /resetcontent"
+        )
+
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
@@ -376,6 +394,27 @@ async def callback_book_order(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # ─── Команди бота ─────────────────────────────────────────────────────────────
 
+def admin_only(handler):
+    """Декоратор: дозволяє виконати команду лише адміністратору."""
+    @wraps(handler)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        if not user or user.id != ADMIN_USER_ID:
+            if update.message:
+                await update.message.reply_text(
+                    "⛔ Ця команда доступна тільки адміністратору."
+                )
+            logger.warning(
+                "Відхилено доступ до /%s: user_id=%s",
+                handler.__name__.replace("cmd_", ""),
+                user.id if user else "?",
+            )
+            return
+        return await handler(update, context)
+    return wrapper
+
+
+@admin_only
 async def cmd_book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/book — публікує наступну книгу в тему групи."""
     log_command(update, "book")
@@ -392,6 +431,7 @@ async def cmd_book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("✅ Книгу тижня опубліковано в групу!")
 
 
+@admin_only
 async def cmd_film(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/film — публікує наступний фільм у тему групи."""
     log_command(update, "film")
@@ -408,6 +448,7 @@ async def cmd_film(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("✅ Фільм тижня опубліковано в групу!")
 
 
+@admin_only
 async def cmd_insight(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/insight — публікує наступний інсайт у тему групи."""
     log_command(update, "insight")
@@ -445,6 +486,7 @@ async def cmd_testpost(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 # ─── Нові рубрики: question / manipulation / phrase ──────────────────────────
 
+@admin_only
 async def cmd_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/question — публікує незручне питання тижня в групу."""
     log_command(update, "question")
@@ -457,6 +499,7 @@ async def cmd_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text("✅ Незручне питання тижня опубліковано!")
 
 
+@admin_only
 async def cmd_manipulation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/manipulation — публікує маніпуляцію тижня в групу."""
     log_command(update, "manipulation")
@@ -469,6 +512,7 @@ async def cmd_manipulation(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text("✅ Маніпуляцію тижня опубліковано!")
 
 
+@admin_only
 async def cmd_phrase(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/phrase — публікує фразу для переговорів у групу."""
     log_command(update, "phrase")
@@ -523,6 +567,23 @@ async def cmd_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/voice — хто такий LexMind."""
     log_command(update, "voice")
     await update.message.reply_text(VOICE_TEXT, parse_mode="Markdown")
+
+
+# ─── /join — доєднатися до спільноти юристів ─────────────────────────────────
+
+async def cmd_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/join — надсилає посилання-запрошення до спільноти юристів."""
+    log_command(update, "join")
+    text = (
+        f"🤝 *{COMMUNITY_NAME}*\n\n"
+        "Закрита спільнота, де юристи діляться досвідом, кейсами та "
+        "корисними знайомствами.\n\n"
+        "Натисніть кнопку нижче, щоб доєднатися 👇"
+    )
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🤝 Доєднатися до спільноти", url=COMMUNITY_INVITE_LINK),
+    ]])
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
 
 # ─── LexMind Radar — команди і обробник повідомлень ─────────────────────────
@@ -1018,6 +1079,7 @@ async def main_async() -> None:
     # Реєструємо команди — публічні
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("voice", cmd_voice))
+    app.add_handler(CommandHandler("join", cmd_join))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("shop", cmd_shop))
     # Shop inline callbacks
@@ -1054,13 +1116,21 @@ async def main_async() -> None:
     # Ініціалізація (підключення до Telegram API, підготовка JobQueue)
     await app.initialize()
 
-    # Синхронізуємо список команд з BotFather (відображається у меню /)
-    from telegram import BotCommand
-    await app.bot.set_my_commands([
-        BotCommand("start",               "Вступ від LexMind"),
-        BotCommand("voice",               "Хто такий LexMind"),
-        BotCommand("help",                "Список команд"),
-        BotCommand("shop",                "📚 Книги — каталог і замовлення"),
+    # Синхронізуємо список команд з BotFather (відображається у меню /).
+    # Два scope: чисте меню для всіх + повний набір лише для адміна.
+    from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault
+
+    # Меню для звичайних користувачів (бачать усі)
+    user_commands = [
+        BotCommand("start", "Головне меню"),
+        BotCommand("shop",  "📚 Книги — каталог і замовлення"),
+        BotCommand("join",  "🤝 Спільнота юристів"),
+        BotCommand("voice", "🗣 Хто такий LexMind"),
+        BotCommand("help",  "ℹ️ Що вміє бот"),
+    ]
+
+    # Повний набір — лише адмін (керування контентом, радар, діагностика)
+    admin_commands = user_commands + [
         BotCommand("book",                "📚 Книжкова провокація тижня → в групу"),
         BotCommand("film",                "🎬 Кінопровокація тижня → в групу"),
         BotCommand("insight",             "💡 Думка тижня → в групу"),
@@ -1082,8 +1152,17 @@ async def main_async() -> None:
         BotCommand("radar_test",          "🔍 Статус Radar (адмін)"),
         BotCommand("lead_keywords",       "🔍 Ключові фрази Radar (адмін)"),
         BotCommand("leads_today",         "📌 Leads за сьогодні (адмін)"),
-    ])
-    logger.info("Команди синхронізовано з BotFather")
+    ]
+
+    # Спершу чистимо можливі старі команди з default scope, потім ставимо нові
+    await app.bot.set_my_commands(user_commands, scope=BotCommandScopeDefault())
+    await app.bot.set_my_commands(
+        admin_commands, scope=BotCommandScopeChat(chat_id=ADMIN_USER_ID)
+    )
+    logger.info(
+        "Команди синхронізовано: %d для всіх, %d для адміна (chat_id=%s)",
+        len(user_commands), len(admin_commands), ADMIN_USER_ID,
+    )
 
     # Реєструємо JobQueue задачі після initialize(), але до start()
     register_jobs(app)
